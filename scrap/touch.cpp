@@ -1,11 +1,41 @@
 #include <cstdio>
+#include <cstdint>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include <cstdint>
 
-#include <iostream>
+#define GL_ERROR_CASE(glerror) \
+    case glerror:              \
+        snprintf(error, sizeof(error), "%s", #glerror)
 
-using namespace std;
+inline void gl_debug(const char *file, int line)
+{
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR)
+    {
+        char error[128];
+
+        switch (err)
+        {
+            GL_ERROR_CASE(GL_INVALID_ENUM);
+            break;
+            GL_ERROR_CASE(GL_INVALID_VALUE);
+            break;
+            GL_ERROR_CASE(GL_INVALID_OPERATION);
+            break;
+            GL_ERROR_CASE(GL_INVALID_FRAMEBUFFER_OPERATION);
+            break;
+            GL_ERROR_CASE(GL_OUT_OF_MEMORY);
+            break;
+        default:
+            snprintf(error, sizeof(error), "%s", "UNKNOWN_ERROR");
+            break;
+        }
+
+        fprintf(stderr, "%s - %s: %d\n", error, file, line);
+    }
+}
+
+#undef GL_ERROR_CASE
 
 void validate_shader(GLuint shader, const char *file = 0)
 {
@@ -38,6 +68,11 @@ bool validate_program(GLuint program)
     return true;
 }
 
+void error_callback(int error, const char *description)
+{
+    fprintf(stderr, "Error: %s\n", description);
+}
+
 struct Buffer
 {
     size_t width, height;
@@ -56,6 +91,23 @@ void buffer_clear(Buffer *buffer, uint32_t color)
     {
         buffer->data[i] = color;
     }
+}
+
+bool sprite_overlap_check(
+    const Sprite &sp_a, size_t x_a, size_t y_a,
+    const Sprite &sp_b, size_t x_b, size_t y_b)
+{
+    // NOTE: For simplicity we just check for overlap of the sprite
+    // rectangles. Instead, if the rectangles overlap, we should
+    // further check if any pixel of sprite A overlap with any of
+    // sprite B.
+    if (x_a < x_b + sp_b.width && x_a + sp_a.width > x_b &&
+        y_a < y_b + sp_b.height && y_a + sp_a.height > y_b)
+    {
+        return true;
+    }
+
+    return false;
 }
 
 void buffer_draw_sprite(Buffer *buffer, const Sprite &sprite, size_t x, size_t y, uint32_t color)
@@ -77,25 +129,6 @@ void buffer_draw_sprite(Buffer *buffer, const Sprite &sprite, size_t x, size_t y
 uint32_t rgb_to_uint32(uint8_t r, uint8_t g, uint8_t b)
 {
     return (r << 24) | (g << 16) | (b << 8) | 255;
-}
-
-void error_callback(int error, const char *description)
-{
-    fprintf(stderr, "Error: %s\n", description);
-}
-
-void processInput(GLFWwindow *window)
-{
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-    {
-        cout << "Closign Window On Esc Press" << endl;
-        glfwSetWindowShouldClose(window, true);
-    }
-}
-
-void framebuffer_size_callback(GLFWwindow *window, int width, int height)
-{
-    glViewport(0, 0, width, height);
 }
 
 int main(int argc, char *argv[])
@@ -122,7 +155,6 @@ int main(int argc, char *argv[])
     }
 
     glfwMakeContextCurrent(window);
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
     GLenum err = glewInit();
     if (err != GLEW_OK)
@@ -134,6 +166,8 @@ int main(int argc, char *argv[])
     int glVersion[2] = {-1, 1};
     glGetIntegerv(GL_MAJOR_VERSION, &glVersion[0]);
     glGetIntegerv(GL_MINOR_VERSION, &glVersion[1]);
+
+    gl_debug(__FILE__, __LINE__);
 
     printf("Using OpenGL: %d.%d\n", glVersion[0], glVersion[1]);
     printf("Renderer used: %s\n", glGetString(GL_RENDERER));
@@ -244,21 +278,20 @@ int main(int argc, char *argv[])
     alien_sprite.width = 11;
     alien_sprite.height = 8;
     alien_sprite.data = new uint8_t[88]{
-        0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0,
-        0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
-        0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0,
-        0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0,
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1,
-        1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1,
-        0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0};
+        0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, // ..@.....@..
+        0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, // ...@...@...
+        0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, // ..@@@@@@@..
+        0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, // .@@.@@@.@@.
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // @@@@@@@@@@@
+        1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, // @.@@@@@@@.@
+        1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, // @.@.....@.@
+        0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0  // ...@@.@@...
+    };
 
     uint32_t clear_color = rgb_to_uint32(0, 128, 0);
 
     while (!glfwWindowShouldClose(window))
     {
-        processInput(window);
-
         buffer_clear(&buffer, clear_color);
 
         buffer_draw_sprite(&buffer, alien_sprite, 112, 128, rgb_to_uint32(128, 0, 0));
