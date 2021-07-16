@@ -1,0 +1,7 @@
+g++ -pthread -o main main.cpp -lglfw -lGL -lGLU -lGLEW
+
+
+compile with glad：
+g++ -o out main.cpp glad.c -lglfw -lGL -lm -lXrandr -lXi -lX11 -lXxf86vm -lpthread -ldl -lXinerama -lXcursor
+
+g++ another.cpp -o another glad.c -lglfw -lGL -ldl
