@@ -1,1 +1,1 @@
-g++ src/main.cpp src/glad.c -o build/main -lglfw -lGL -ldl -lGLEW
+g++ src/main.cpp -o build/main -lglfw -lGL -ldl -lGLEW
