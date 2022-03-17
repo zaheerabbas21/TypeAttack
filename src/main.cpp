@@ -7,6 +7,8 @@
 
 using namespace std;
 
+// Demo Complete
+
 bool game_running = false;
 int move_dir = 0;
 bool fire_pressed = 0;
